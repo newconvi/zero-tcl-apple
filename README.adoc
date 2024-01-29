@@ -6,3 +6,12 @@ This implementation is based on https://dsr.gematik.solutions/[DSR PoC]. The iOS
 * CryptoKit support
 * Support for both MTLS and JOSE based client identities
 * Multi-client support
+
+.Usage example
+[source,swift]
+----
+client = try TrustClient(regURL: URL(string: "https://zerobin.spilikin.dev")!)
+let certificate = try await client.updateMTLSCertificate()
+let urlSession = try client.makeMTLSURLSession()
+let response = try await urlSession.data(from: URL(string: "https://zerobin.spilikin.dev/echo")!)
+----

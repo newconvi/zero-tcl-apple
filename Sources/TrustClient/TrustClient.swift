@@ -33,6 +33,10 @@ public class TrustClient {
         jose = try JOSEIdentity(context)
     }
 
+    public makeMTLSURLSession(configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral) throws -> URLSession {
+        return try self.mtls.makeURLSession(configuration: configuration)
+    }
+
     func echo() async throws -> EchoOutput {
         let request = URLRequest(url: URL(string: "/echo", relativeTo: self.regURL)!)
 
