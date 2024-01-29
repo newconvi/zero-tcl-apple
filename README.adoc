@@ -13,5 +13,8 @@ This implementation is based on https://dsr.gematik.solutions/[DSR PoC]. The iOS
 client = try TrustClient(regURL: URL(string: "https://zerobin.spilikin.dev")!)
 let certificate = try await client.updateMTLSCertificate()
 let urlSession = try client.makeMTLSURLSession()
-let response = try await urlSession.data(from: URL(string: "https://zerobin.spilikin.dev/echo")!)
+let (data, response) = try await urlSession.data(from: URL(string: "https://zerobin.spilikin.dev/echo")!)
+if let data, let string = String(data: data, encoding: .utf8) {
+    print(string)
+}
 ----
