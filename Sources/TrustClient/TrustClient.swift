@@ -33,7 +33,7 @@ public class TrustClient {
         jose = try JOSEIdentity(context)
     }
 
-    public makeMTLSURLSession(configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral) throws -> URLSession {
+    public func makeMTLSURLSession(configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral) throws -> URLSession {
         return try self.mtls.makeURLSession(configuration: configuration)
     }
 
