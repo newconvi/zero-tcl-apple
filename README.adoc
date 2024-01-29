@@ -1,11 +1,11 @@
-= 🤝🔐 Experimental Zero Trust Client for iOS
+= 🤝🔐 Experimental Zero Trust Client for Apple devices
 
-This implementation is based on https://dsr.gematik.solutions/[DSR PoC]. The iOS code has been rewritten with following goals in mind:
+This implementation is based on https://dsr.gematik.solutions/[DSR PoC]. The code has been rewritten with following goals in mind:
 
 * Minimum dependencies
 * CryptoKit support
 * Support for both MTLS and JOSE based client identities
-* Multi-client support
+* Multi-client support to have several Trust Clients in one App
 
 .Usage example
 [source,swift]
