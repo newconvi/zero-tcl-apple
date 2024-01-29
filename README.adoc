@@ -3,6 +3,6 @@
 This implementation is based on https://dsr.gematik.solutions/[DSR PoC]. The iOS code has been rewritten with following goals in mind:
 
 * Minimum dependencies
-* CryptoKit
+* CryptoKit support
 * Support for both MTLS and JOSE based client identities
 * Multi-client support
