@@ -36,33 +36,3 @@ class JOSEIdentity: SecureEnclaveIdentity {
 
 }
 
-struct ECKey: Codable {
-    var kty: String
-    var crv: String
-    var x: String
-    var y: String
-    var kid: String? = nil
-    var use: String? = nil
-}
-
-extension P256.Signing.PublicKey {
-
-    func jwkRepresentation(kid: String? = nil, use: String? = nil) throws -> Data {
-        let size = self.rawRepresentation.count/2
-
-        let x = self.rawRepresentation.prefix(upTo: size)
-        let y = self.rawRepresentation.suffix(from: size)
-
-        let jwk = ECKey(
-            kty: "EC",
-            crv: "P-256",
-            x: x.base64URLEncodedString(),
-            y: y.base64URLEncodedString(),
-            kid: kid,
-            use: use
-        )
-
-        return try JSONEncoder().encode(jwk)
-    }
-
-}

@@ -12,23 +12,49 @@ public enum TrustClientError: Error {
 }
 
 public class TrustClient {
-    var regURL: URL
+    public var urlSessionConfig: URLSessionConfiguration
+    public static var defaultUrlSessionConfig: URLSessionConfiguration {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpAdditionalHeaders = [
+            "User-Agent": "TrustClient/0.0.1"
+        ]
+        return config
+    }
+    
+    struct Endpoints {
+        let baseURL: URL
+        let newRegistration: URL
+        let echo: URL
+        let issueAnonymousCert: URL
+        init(baseURL: URL) {
+            self.baseURL = baseURL
+            self.echo = URL(string: "/echo", relativeTo: baseURL)!
+            self.issueAnonymousCert = URL(string: "/ca/issue-cert", relativeTo: baseURL)!
+            self.newRegistration = URL(string: "/reg/registrations", relativeTo: baseURL)!
+        }
+    }
+    
+    var endpoints: Endpoints
     var urlSession: URLSession
 
-    var attester: Attester
+    var attestor: Attestor
     var mtls: MTLSIdentity
     var mtlsURLSession: URLSession
 
     var jose: JOSEIdentity
 
-    public init(regURL: URL, context: String = "default") throws {
-        self.regURL = regURL
-        let urlSessionCfg = URLSessionConfiguration.ephemeral
-        self.urlSession = URLSession(configuration: urlSessionCfg)
+    public init(
+        regURL: URL,
+        context: String = "default",
+        urlSessionConfig: URLSessionConfiguration = TrustClient.defaultUrlSessionConfig
+    ) throws {
+        self.endpoints = Endpoints(baseURL: regURL)
+        self.urlSessionConfig = urlSessionConfig
+        self.urlSession = URLSession(configuration: urlSessionConfig)
 
-        self.attester = Attester(context)
+        self.attestor = Attestor(context)
         self.mtls = try MTLSIdentity(context)
-        self.mtlsURLSession = try self.mtls.makeURLSession(configuration: urlSessionCfg)
+        self.mtlsURLSession = try self.mtls.makeURLSession(configuration: urlSessionConfig)
 
         jose = try JOSEIdentity(context)
     }
@@ -37,8 +63,8 @@ public class TrustClient {
         return try self.mtls.makeURLSession(configuration: configuration)
     }
 
-    func echo() async throws -> EchoOutput {
-        let request = URLRequest(url: URL(string: "/echo", relativeTo: self.regURL)!)
+    public func echo() async throws -> EchoOutput {
+        let request = URLRequest(url: endpoints.echo)
 
         let (data, response) = try await mtlsURLSession.data(for: request)
         let statusCode = (response as! HTTPURLResponse).statusCode
@@ -51,12 +77,12 @@ public class TrustClient {
 
         return echoOutput
     }
-
-    func updateMTLSCertificate() async throws -> Certificate {
+    
+    public func updateMTLSCertificate() async throws -> Certificate {
         let csr = try mtls.createCertificateSigningRequest()
         let csrPEM = try csr.serializeAsPEM()
         print(csrPEM.pemString)
-        var request = URLRequest(url: URL(string: "/ca/issue-cert", relativeTo:self.regURL)!)
+        var request = URLRequest(url: endpoints.issueAnonymousCert)
         request.addValue("application/pkcs10", forHTTPHeaderField: "Content-Type")
         request.httpMethod = "POST"
         request.httpBody = Data(csrPEM.derBytes)

@@ -13,8 +13,10 @@ let package = Package(
             targets: ["TrustClient"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-certificates.git", .upToNextMajor(from: "1.0.0"))
-    ],    
+        .package(url: "https://github.com/apple/swift-certificates.git", .upToNextMajor(from: "1.0.0")),
+        .package(url: "https://github.com/airsidemobile/JOSESwift.git", from: "2.3.0")
+
+    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
@@ -22,6 +24,7 @@ let package = Package(
             name: "TrustClient",
             dependencies: [
                 .product(name: "X509", package: "swift-certificates"),
+                .product(name: "JOSESwift", package: "JOSESwift")
             ]),
             
         .testTarget(

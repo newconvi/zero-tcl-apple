@@ -2,7 +2,7 @@ import Foundation
 import DeviceCheck
 import CryptoKit
 
-class Attester {
+class Attestor {
     var context: String
     var keyId: String? {
         set {
