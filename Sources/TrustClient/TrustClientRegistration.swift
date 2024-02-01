@@ -1,6 +1,8 @@
 import Foundation
 import CryptoKit
 import JOSESwift
+import SwiftASN1
+import X509
 
 // Client registration implementation
 public extension TrustClient {
@@ -44,10 +46,14 @@ public extension TrustClient {
         ])
         header.jwkTyped = pukJwk
         
-        let message = "Summer ⛱, Sun ☀️, Cactus 🌵".data(using: .utf8)!
+        let csr = try mtls.createCertificateSigningRequest()
+        var der = DER.Serializer()
+        try csr.serialize(into: &der)
 
-        let payload = Payload(message)
-        
+        let registrationInput = RegistrationInput(name: "iPhone", csr: Data(der.serializedBytes).base64EncodedString())
+
+        let payload = Payload(try JSONEncoder().encode(registrationInput))
+
         let prkSekKey = try prkJwk.secKey()
                 
         guard let signer = Signer(signingAlgorithm: .ES256, key: prkSekKey) else {
@@ -66,10 +72,14 @@ public extension TrustClient {
             throw TrustClientError.badServerResponse(statusCode)
         }
 
-        guard let output = try? JSONDecoder().decode(RegistrationOutput.self, from: data) else {
-            throw TrustClientError.genericError("Unable to parse response")
+        do {
+            let output = try JSONDecoder().decode(RegistrationOutput.self, from: data)
+            let certificate = try Certificate(derEncoded: output.client.certificate.slice)
+            try mtls.updateCertificate(certificate)
+            return output
+        } catch {
+            throw TrustClientError.genericError("Unable to parse response: \(error.localizedDescription)")
         }
 
-        return output
     }
 }

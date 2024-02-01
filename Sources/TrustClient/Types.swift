@@ -1,5 +1,10 @@
 import Foundation
 
+public struct RegistrationInput: Encodable {
+    public let name: String
+    public let csr: String?
+}
+
 public enum RegistrationStatus: String, Codable {
     case pending = "pending"
     case error = "error"
@@ -10,12 +15,13 @@ public enum RegistrationStatus: String, Codable {
 public struct RegistrationOutput: Decodable {
     public let id: String
     public let status: RegistrationStatus
-    public let client: UnregisteredClientOutput
-    
+    public let client: ClientRegistrationOutput
+
 }
 
-public struct UnregisteredClientOutput: Decodable {
+public struct ClientRegistrationOutput: Decodable {
     public let id: String
+    public let certificate: Data
 }
 
 public struct RegisteredClientOutput: Decodable {
