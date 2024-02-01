@@ -23,14 +23,18 @@ public class TrustClient {
     
     struct Endpoints {
         let baseURL: URL
+        let nonce: URL
         let newRegistration: URL
+        // debugging
         let echo: URL
         let issueAnonymousCert: URL
         init(baseURL: URL) {
             self.baseURL = baseURL
+            self.nonce = URL(string: "/reg/nonce", relativeTo: baseURL)!
+            self.newRegistration = URL(string: "/reg/registrations", relativeTo: baseURL)!
+            // debugging
             self.echo = URL(string: "/echo", relativeTo: baseURL)!
             self.issueAnonymousCert = URL(string: "/ca/issue-cert", relativeTo: baseURL)!
-            self.newRegistration = URL(string: "/reg/registrations", relativeTo: baseURL)!
         }
     }
     
