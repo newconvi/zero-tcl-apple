@@ -28,7 +28,6 @@ public class TrustClient {
     }
 
     public enum State {
-        case clientBroken
         case unregistered
         case registrationPending
         case registrationError
@@ -66,33 +65,27 @@ public class TrustClient {
         regURL: URL,
         context: String = "default",
         urlSessionConfig: URLSessionConfiguration = TrustClient.defaultUrlSessionConfig
-    ) {
+    ) throws {
         self.endpoints = Endpoints(baseURL: regURL)
         self.urlSessionConfig = urlSessionConfig
         self.urlSession = URLSession(configuration: urlSessionConfig)
 
         self.attestor = Attestor(context)
 
-        do {
-            self.mtls = try MTLSIdentity(context)
-            self.mtlsURLSession = try self.mtls.makeURLSession(configuration: urlSessionConfig)
+        self.mtls = try MTLSIdentity(context)
+        self.mtlsURLSession = try self.mtls.makeURLSession(configuration: urlSessionConfig)
 
-            jose = try JOSEIdentity(context)
+        jose = try JOSEIdentity(context)
 
-            if let cert = try mtls.retrieveCertificate() {
-                if cert.notValidAfter <= Date() {
-                    self._state = .registrationExpired
-                } else {
-                    self._state = .registered
-                }
+        if let cert = try mtls.retrieveCertificate() {
+            if cert.notValidAfter <= Date() {
+                self._state = .registrationExpired
             } else {
-                self._state = .unregistered
+                self._state = .registered
             }
-        } catch {
-            self._state = .clientBroken
+        } else {
+            self._state = .unregistered
         }
-
-
     }
 
     public func makeMTLSURLSession(configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral) throws -> URLSession {
@@ -143,7 +136,7 @@ public class TrustClient {
         var request = URLRequest(url: endpoints.nonce)
         request.httpMethod = "HEAD"
 
-        let (data, response) = try await urlSession.data(for: request)
+        let (_, response) = try await urlSession.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw TrustClientError.genericError("Where did HTTP go?")
         }
@@ -167,7 +160,7 @@ public class TrustClient {
         let pukJwk = try ephemeralKey.publicKey.jwk()
 
         // create key attestation
-        var thumbprint = try pukJwk.thumbprint()
+        let thumbprint = try pukJwk.thumbprint()
         var clientData = Data(base64URLEncoded: thumbprint.data(using: .utf8)!)!
         clientData.append(nonce.data(using: .utf8)!)
         let attestation = try await attestor.generateAndAttestKey(clientData: clientData)

@@ -6,8 +6,8 @@ import SwiftASN1
 
 public struct SecureEnclaveIdentityError: Error {
     var details: String
-    init(_ error:  Unmanaged<CFError>?) {
-        details = .errorText(error)
+    init(_ error:  Unmanaged<CFError>) {
+        details = "\(error.self): \(error.takeRetainedValue().localizedDescription)"
     }
     init(_ details: String) {
         self.details = details
@@ -71,7 +71,7 @@ class SecureEnclaveIdentity {
             accessFlags,
             &error
         ) else {
-            throw SecureEnclaveIdentityError(error)
+            throw SecureEnclaveIdentityError(error!)
         }
 
         let attributes: [String: Any] = [
@@ -86,7 +86,7 @@ class SecureEnclaveIdentity {
         ]
 
         guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
-            throw SecureEnclaveIdentityError(error)
+            throw SecureEnclaveIdentityError(error!)
         }
 
         return privateKey
@@ -105,7 +105,7 @@ class SecureEnclaveIdentity {
             data as CFData,
             &error
         ) as Data? else {
-            throw SecureEnclaveIdentityError(error)
+            throw SecureEnclaveIdentityError(error!)
         }
 
         return signature
@@ -186,7 +186,7 @@ class SecureEnclaveIdentity {
         let retrieveQuery: [String: Any] = [
             kSecClass as String: kSecClassCertificate,
             kSecAttrLabel as String: keyTag,
-            kSecReturnRef as String: kCFBooleanTrue,
+            kSecReturnRef as String: true,
         ]
         var result : CFTypeRef?
         let status : OSStatus = SecItemCopyMatching(retrieveQuery as CFDictionary, &result)
