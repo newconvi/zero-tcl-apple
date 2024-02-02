@@ -32,12 +32,12 @@ class SecureEnclaveIdentity {
 
     func querySecIdentity(_ keyTag: String) throws -> SecIdentity? {
         let query: [String: Any] = [
-          kSecClass as String: kSecClassIdentity,
-          kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-          kSecAttrKeySizeInBits as String: 256,
-          kSecAttrApplicationTag as String: keyTag,
-          kSecMatchLimit as String: kSecMatchLimitOne,
-          kSecReturnRef as String: true,
+            kSecClass as String: kSecClassIdentity,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrApplicationTag as String: keyTag,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnRef as String: true,
         ]
 
         var item: CFTypeRef?
@@ -122,15 +122,15 @@ class SecureEnclaveIdentity {
         var coder = DER.Serializer()
 
         /*
-        let extensions = try Certificate.Extensions {
-            //https://oidref.com/1.3.6.1.5.5.7.48.1.2
-            Certificate.Extension(oid: [1, 3, 6, 1 ,5, 5, 7, 48, 1, 2], critical: true, value: "foo".data(using: .utf8)!.slice)
-        }
-        let extensionRequest = ExtensionRequest(extensions: extensions)
+         let extensions = try Certificate.Extensions {
+         //https://oidref.com/1.3.6.1.5.5.7.48.1.2
+         Certificate.Extension(oid: [1, 3, 6, 1 ,5, 5, 7, 48, 1, 2], critical: true, value: "foo".data(using: .utf8)!.slice)
+         }
+         let extensionRequest = ExtensionRequest(extensions: extensions)
 
-        var varAttrs = try CertificateSigningRequest.Attributes(
-            [.init(extensionRequest)]
-        )
+         var varAttrs = try CertificateSigningRequest.Attributes(
+         [.init(extensionRequest)]
+         )
          */
 
         try coder.appendConstructedNode(identifier: .sequence) { coder in
@@ -180,6 +180,25 @@ class SecureEnclaveIdentity {
         let deleteQuery: [String: Any] = [kSecClass as String: kSecClassCertificate,
                                           kSecAttrLabel as String: keyTag]
         SecItemDelete(deleteQuery as CFDictionary)
+    }
+
+    func queryCertificate(_ keyTag: String) throws -> Certificate? {
+        let retrieveQuery: [String: Any] = [
+            kSecClass as String: kSecClassCertificate,
+            kSecAttrLabel as String: keyTag,
+            kSecReturnRef as String: kCFBooleanTrue,
+        ]
+        var result : CFTypeRef?
+        let status : OSStatus = SecItemCopyMatching(retrieveQuery as CFDictionary, &result)
+
+        guard status == errSecSuccess else {
+            return nil
+        }
+
+        let secCert = result as! SecCertificate
+        let certData = SecCertificateCopyData(secCert) as Data
+
+        return try Certificate(derEncoded: certData.slice)
     }
 
     func updateSecCertificate(_ keyTag: String, certificate: Certificate) throws  {

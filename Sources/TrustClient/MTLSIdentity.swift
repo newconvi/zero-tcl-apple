@@ -58,7 +58,7 @@ class MTLSIdentity: SecureEnclaveIdentity {
     }
 
     func retrieveCertificate() throws -> Certificate? {
-        throw SecureEnclaveIdentityError("Not implemented")
+        return try queryCertificate(mtlsKeyTag)
     }
 
     class MTLSDelegate: NSObject, URLSessionDelegate {
