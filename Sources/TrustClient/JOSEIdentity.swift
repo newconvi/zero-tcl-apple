@@ -7,8 +7,11 @@ class JOSEIdentity: SecureEnclaveIdentity {
     var context: String
     var keyTag: String
     var accessFlags: SecAccessControlCreateFlags
-    var privateSecKey: SecKey!
+    var _privateSecKey: SecKey?
     var publicKey: P256.Signing.PublicKey!
+    var privateSecKey: SecKey {
+        return _privateSecKey!
+    }
 
     init(
         _ context: String,
@@ -25,13 +28,13 @@ class JOSEIdentity: SecureEnclaveIdentity {
         let existingSecKey = try querySecKey(keyTag)
 
         if let existingKey = existingSecKey {
-            self.privateSecKey = existingKey
+            self._privateSecKey = existingKey
         } else {
             print("Cannot load existing identity. Creating new one.")
-            self.privateSecKey = try generateSecKey(keyTag, accessFlags: accessFlags)
+            self._privateSecKey = try generateSecKey(keyTag, accessFlags: accessFlags)
         }
 
-        self.publicKey = try getPublicKey(privateKey: self.privateSecKey)
+        self.publicKey = try getPublicKey(privateKey: self._privateSecKey!)
     }
 
 }

@@ -1,8 +1,8 @@
 import Foundation
 
-public struct RegistrationInput: Encodable {
-    public let name: String
-    public let csr: String?
+public enum AttestationFormat: String, Codable {
+    case attestation = "apple-attestation"
+    case assertion = "apple-assertion"
 }
 
 public enum RegistrationStatus: String, Codable {
@@ -12,20 +12,20 @@ public enum RegistrationStatus: String, Codable {
     case complete = "complete"
 }
 
+public struct RegistrationInput: Encodable {
+    public let name: String
+}
+
+public struct RegistrationChallengeOutput: Codable {
+    public let type: String
+    public let url: String
+    public let status: String
+}
+
 public struct RegistrationOutput: Decodable {
     public let id: String
     public let status: RegistrationStatus
-    public let client: ClientRegistrationOutput
-
-}
-
-public struct ClientRegistrationOutput: Decodable {
-    public let id: String
-    public let certificate: Data
-}
-
-public struct RegisteredClientOutput: Decodable {
-    public let id: String
+    public let challenges: [RegistrationChallengeOutput]
 }
 
 public struct EchoOutput: Decodable {
@@ -47,9 +47,4 @@ public struct TLSCertificate: Codable {
     public let notAfter: String
     public let notBefore: String
     public let subject: String
-}
-
-enum AttestationFormat: String, Codable {
-    case attestation = "apple-attestation"
-    case assertion = "apple-assertion"
 }

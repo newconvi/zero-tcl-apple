@@ -60,7 +60,7 @@ class SecureEnclaveIdentity {
     }
 
     func generateSecKey(_ keyTag: String, accessFlags: SecAccessControlCreateFlags) throws -> SecKey {
-        // delete key if it aöready exists
+        // delete key if it already exists
         try deleteSecKey(keyTag)
 
         var error: Unmanaged<CFError>?

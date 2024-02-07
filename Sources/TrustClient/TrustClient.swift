@@ -1,9 +1,10 @@
-import Foundation
-import Combine
 import CryptoKit
 import X509
 import JOSESwift
 import SwiftASN1
+import AuthenticationServices
+import SwiftUI
+
 
 public enum TrustClientError: Error {
     case genericError(_ details: String = "")
@@ -56,11 +57,13 @@ public class TrustClient {
     var urlSession: URLSession
 
     var attestor: Attestor
-    var mtls: MTLSIdentity
+    var mtlsIdentity: MTLSIdentity
     var mtlsURLSession: URLSession
 
-    var jose: JOSEIdentity
+    var joseIdentity: JOSEIdentity
 
+    var registrationURL: URL?
+    
     public init(
         regURL: URL,
         context: String = "default",
@@ -72,12 +75,12 @@ public class TrustClient {
 
         self.attestor = Attestor(context)
 
-        self.mtls = try MTLSIdentity(context)
-        self.mtlsURLSession = try self.mtls.makeURLSession(configuration: urlSessionConfig)
+        self.mtlsIdentity = try MTLSIdentity(context)
+        self.mtlsURLSession = try self.mtlsIdentity.makeURLSession(configuration: urlSessionConfig)
 
-        jose = try JOSEIdentity(context)
+        joseIdentity = try JOSEIdentity(context)
 
-        if let cert = try mtls.retrieveCertificate() {
+        if let cert = try mtlsIdentity.retrieveCertificate() {
             if cert.notValidAfter <= Date() {
                 self._state = .registrationExpired
             } else {
@@ -89,7 +92,7 @@ public class TrustClient {
     }
 
     public func makeMTLSURLSession(configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral) throws -> URLSession {
-        return try self.mtls.makeURLSession(configuration: configuration)
+        return try self.mtlsIdentity.makeURLSession(configuration: configuration)
     }
 
     public func echo() async throws -> EchoOutput {
@@ -108,7 +111,7 @@ public class TrustClient {
     }
     
     public func updateMTLSCertificate() async throws -> Certificate {
-        let csr = try mtls.createCertificateSigningRequest()
+        let csr = try mtlsIdentity.createCertificateSigningRequest()
         let csrPEM = try csr.serializeAsPEM()
         print(csrPEM.pemString)
         var request = URLRequest(url: endpoints.issueAnonymousCert)
@@ -127,7 +130,7 @@ public class TrustClient {
         }
         let certificate = try Certificate(pemEncoded: pemString)
 
-        try mtls.updateCertificate(certificate)
+        try mtlsIdentity.updateCertificate(certificate)
 
         return certificate
     }
@@ -151,13 +154,11 @@ public class TrustClient {
         return nonce
     }
 
-    public func register(nonce: String) async throws -> RegistrationOutput {
+    public func register(nonce: String, authenticationSessionCallback: ((URL) async throws ->URL)? = nil) async throws -> RegistrationOutput {
         var request = URLRequest(url: endpoints.newRegistration)
         request.httpMethod = "POST"
         request.addValue("application/jose", forHTTPHeaderField: "Content-Type")
-        let ephemeralKey = P256.Signing.PrivateKey()
-        let prkJwk = try ephemeralKey.jwk()
-        let pukJwk = try ephemeralKey.publicKey.jwk()
+        let pukJwk = try joseIdentity.publicKey.jwk()
 
         // create key attestation
         let thumbprint = try pukJwk.thumbprint()
@@ -168,21 +169,28 @@ public class TrustClient {
         var header = try JWSHeader(parameters: [
             "alg": SignatureAlgorithm.ES256.rawValue,
             "nonce": nonce,
-            "urn:telematik:attestation": ["fmt": AttestationFormat.attestation.rawValue, "data": attestation.base64URLEncodedString()]
+            "cty": "x-registration-apple+json",
+            "urn:telematik:attestation": [
+                "fmt": AttestationFormat.attestation.rawValue,
+                "data": attestation.base64EncodedString()
+            ]
         ])
         header.jwkTyped = pukJwk
 
-        let csr = try mtls.createCertificateSigningRequest()
+        /*
+        let csr = try mtlsIdentity.createCertificateSigningRequest()
         var der = DER.Serializer()
         try csr.serialize(into: &der)
+        csr: Data(der.serializedBytes).base64EncodedString()
+         */
 
-        let registrationInput = RegistrationInput(name: "iPhone", csr: Data(der.serializedBytes).base64EncodedString())
+        let registrationInput = RegistrationInput(
+            name: "iPhone"
+        )
 
         let payload = Payload(try JSONEncoder().encode(registrationInput))
 
-        let prkSekKey = try prkJwk.secKey()
-
-        guard let signer = Signer(signingAlgorithm: .ES256, key: prkSekKey) else {
+        guard let signer = Signer(signingAlgorithm: .ES256, key: joseIdentity.privateSecKey) else {
             throw TrustClientError.genericError("Unable create JWS signer")
         }
 
@@ -193,20 +201,92 @@ public class TrustClient {
         request.httpBody = jws.compactSerializedData
 
         let (data, response) = try await urlSession.data(for: request)
-        let statusCode = (response as! HTTPURLResponse).statusCode
-        if statusCode != 201 {
-            throw TrustClientError.badServerResponse(statusCode)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TrustClientError.genericError("Where did HTTP go?")
+        }
+        if httpResponse.statusCode != 201 {
+            throw TrustClientError.badServerResponse(httpResponse.statusCode)
         }
 
-        do {
-            let output = try JSONDecoder().decode(RegistrationOutput.self, from: data)
-            let certificate = try Certificate(derEncoded: output.client.certificate.slice)
-            try mtls.updateCertificate(certificate)
-            return output
-        } catch {
-            throw TrustClientError.genericError("Unable to parse response: \(error.localizedDescription)")
+        self.registrationURL = try location(httpResponse)
+        let registration = try JSONDecoder().decode(RegistrationOutput.self, from: data)
+        /*
+        for challenge in registration.challenges {
+            if challenge.type == "oidc" {
+                guard let authenticationSessionCallback = authenticationSessionCallback else {
+                    throw TrustClientError.genericError("Received OIDC challenge, but no callback is provided")
+                }
+                guard let authUrl = URL(string: challenge.url) else {
+                    throw TrustClientError.genericError("Invalid URL: \(challenge.url)")
+                }
+                let urlFromServer = try await authenticationSessionCallback(authUrl)
+                print(urlFromServer)
+            }
+        }
+         */
+        return registration
+    }
+    
+    public func fetchRegistration() async throws {
+        guard let registrationURL = self.registrationURL else {
+            throw TrustClientError.genericError("No pending registration")
+        }
+        
+        let nonce = try await nonce()
+        
+        var request = URLRequest(url: registrationURL)
+        request.httpMethod = "POST"
+        request.addValue("application/jose", forHTTPHeaderField: "Content-Type")
+        let pukJwk = try joseIdentity.publicKey.jwk()
+
+        // create key attestation
+        let thumbprint = try pukJwk.thumbprint()
+        var clientData = Data(base64URLEncoded: thumbprint.data(using: .utf8)!)!
+        clientData.append(nonce.data(using: .utf8)!)
+        let assertion = try await attestor.generateAssertion(clientData: clientData)
+
+        var header = try JWSHeader(parameters: [
+            "alg": SignatureAlgorithm.ES256.rawValue,
+            "nonce": nonce,
+            "urn:telematik:attestation": [
+                "fmt": AttestationFormat.assertion.rawValue,
+                "data": assertion.base64EncodedString()
+            ]
+        ])
+        header.jwkTyped = pukJwk
+        
+        let payload = Payload("".data(using: .utf8)!)
+
+        guard let signer = Signer(signingAlgorithm: .ES256, key: joseIdentity.privateSecKey) else {
+            throw TrustClientError.genericError("Unable create JWS signer")
         }
 
+        guard let jws = try? JWS(header: header, payload: payload, signer: signer) else {
+            throw TrustClientError.genericError("Unable to sign message using JWS")
+        }
+
+        request.httpBody = jws.compactSerializedData
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TrustClientError.genericError("Where did HTTP go?")
+        }
+        if httpResponse.statusCode != 200 {
+            throw TrustClientError.badServerResponse(httpResponse.statusCode)
+        }
+
+        print(String(data: data, encoding: .utf8))
+    }
+    
+    func location(_ httpResponse: HTTPURLResponse) throws -> URL {
+        guard let urlString = httpResponse.value(forHTTPHeaderField: "Location") else {
+            throw TrustClientError.genericError("Location header not provided by the server")
+        }
+        guard let url = URL(string: urlString) else {
+            throw TrustClientError.genericError("Server provided invalid URL: \(urlString)")
+
+        }
+        return url
     }
 }
 
